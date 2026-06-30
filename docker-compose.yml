@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: f1lab-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: f1lab
+      POSTGRES_PASSWORD: f1lab_dev_pw
+      POSTGRES_DB: f1lab
+    ports:
+      - "5432:5432"
+    volumes:
+      - f1lab_pgdata:/var/lib/postgresql/data
+
+volumes:
+  f1lab_pgdata:
