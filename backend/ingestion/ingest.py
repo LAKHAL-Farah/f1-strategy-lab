@@ -129,22 +129,33 @@ def _ms(td) -> int | None:
 def insert_laps(conn, session, race_id: int, driver_map: dict[str, int]) -> int:
     laps_df = session.laps.reset_index(drop=True)
 
-    # session.laps.get_weather_data() returns one weather sample per lap,
-    # already time-matched -- row order matches laps_df exactly, so a
-    # straight positional concat is safe here (confirmed against FastF1's
-    # own documented usage pattern).
+    # Align weather data
     weather_df = laps_df.get_weather_data().reset_index(drop=True)
-    laps_df = pd.concat([laps_df, weather_df[["AirTemp", "TrackTemp", "Rainfall"]]], axis=1)
+    laps_df = pd.concat(
+        [laps_df, weather_df[["AirTemp", "TrackTemp", "Rainfall"]]],
+        axis=1
+    )
 
     inserted = 0
+
     for _, row in laps_df.iterrows():
         code = row["Driver"]
         if code not in driver_map:
-            continue  # driver not in session.results (rare edge case) -- skip, don't crash the whole race
+            continue
+
+        # -------- FIX: compound normalization --------
+        compound = row["Compound"]
+
+        if compound is None or pd.isna(compound):
+            compound = None
+        elif isinstance(compound, str) and compound.strip().lower() == "none":
+            compound = None
+        else:
+            compound = str(compound)
+        # --------------------------------------------
 
         conn.execute(
-            text(
-                """
+            text("""
                 INSERT INTO laps (
                     race_id, driver_id, lap_number, lap_time_ms, sector1_ms,
                     sector2_ms, sector3_ms, compound, tire_age, stint_number,
@@ -162,8 +173,7 @@ def insert_laps(conn, session, race_id: int, driver_map: dict[str, int]) -> int:
                     compound = EXCLUDED.compound,
                     tire_age = EXCLUDED.tire_age,
                     position = EXCLUDED.position
-                """
-            ),
+            """),
             {
                 "race_id": race_id,
                 "driver_id": driver_map[code],
@@ -172,7 +182,7 @@ def insert_laps(conn, session, race_id: int, driver_map: dict[str, int]) -> int:
                 "sector1_ms": _ms(row["Sector1Time"]),
                 "sector2_ms": _ms(row["Sector2Time"]),
                 "sector3_ms": _ms(row["Sector3Time"]),
-                "compound": row["Compound"],
+                "compound": compound,
                 "tire_age": int(row["TyreLife"]) if pd.notnull(row["TyreLife"]) else None,
                 "stint_number": int(row["Stint"]) if pd.notnull(row["Stint"]) else None,
                 "position": int(row["Position"]) if pd.notnull(row["Position"]) else None,
@@ -183,7 +193,9 @@ def insert_laps(conn, session, race_id: int, driver_map: dict[str, int]) -> int:
                 "rainfall": bool(row["Rainfall"]) if pd.notnull(row["Rainfall"]) else None,
             },
         )
+
         inserted += 1
+
     return inserted
 
 
@@ -197,13 +209,30 @@ def insert_pit_stops(conn, race_id: int, driver_map: dict[str, int], year: int, 
     for _, row in pit_df.iterrows():
         ergast_id = row["driverId"]
 
-        # 🔥 normalize
         code = ERGAST_TO_F1.get(ergast_id)
-        if not code:
+        if not code or code not in driver_map:
             continue
 
-        if code not in driver_map:
+        duration = row["duration"]
+
+        # -------------------------------
+        # SAFETY FILTER (CRITICAL FIX)
+        # -------------------------------
+        if pd.isna(duration):
             continue
+
+        # convert safely
+        duration_ms = int(duration.total_seconds() * 1000)
+
+        # reject impossible pit stops
+        if duration_ms <= 0:
+            continue
+
+        # 🚨 HARD FILTER (your issue fix)
+        if duration_ms > 180000:  # 3 minutes max realistic bound
+            print(f"⚠️ skipping invalid pit stop: {duration_ms} ms (race {race_id}, lap {row['lap']})")
+            continue
+        # -------------------------------
 
         conn.execute(
             text("""
@@ -216,7 +245,7 @@ def insert_pit_stops(conn, race_id: int, driver_map: dict[str, int], year: int, 
                 "race_id": race_id,
                 "driver_id": driver_map[code],
                 "lap_number": int(row["lap"]),
-                "stop_duration_ms": _ms(row["duration"]),
+                "stop_duration_ms": duration_ms,
             },
         )
 
