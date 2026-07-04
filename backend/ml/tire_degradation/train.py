@@ -1,18 +1,4 @@
-"""Repeatable training pipeline for the tire degradation model.
 
-Final configuration, validated in 03_model_refinement.ipynb against real data:
-tuned hyperparameters + out-of-fold target-encoded circuit + laps_since_sc.
-Combined honest MAE was 5102 ms in that validation run, vs. 7209 ms for the
-original untuned/arbitrary-ID/no-SC-feature baseline in 02_tire_degradation_model.ipynb.
-
-This script only ever produces the honest, time-aware-split metric — there is
-no naive-split code path here on purpose, so a bad number can never
-accidentally get appended to ML_FINDINGS.md.
-
-Usage:
-    cd backend
-    uv run python ml/tire_degradation/train.py
-"""
 from __future__ import annotations
 
 import os

@@ -1,24 +1,4 @@
-"""Single source of truth for tire degradation feature engineering.
 
-Winning configuration, validated in 03_model_refinement.ipynb against real data:
-tuned hyperparameters + out-of-fold target-encoded circuit + laps_since_sc.
-Combined honest MAE: 5102 ms, vs. 7209 ms for the original notebook-02 baseline
-(untuned, arbitrary circuit ID, no SC feature). See ML_FINDINGS.md for the full
-comparison table and the caveat that laps_since_sc's marginal contribution once
-circuit is properly encoded is modest (~66ms) — real, but smaller than it looked
-in isolation against the weaker arbitrary-ID baseline.
-
-Both train.py and model.py import from here. If you feel the urge to write
-feature logic inside model.py, train.py, or a notebook directly instead —
-that urge is wrong. Add a function here instead.
-
-KNOWN DATA CAVEAT (see CHECKPOINT_DATA_EXPLORATION_CLEANING.md):
-ingest.py currently has a bug where some laps get the literal string "None"
-written into `compound` instead of a true SQL NULL. Until that's fixed at
-the source, every query in this module explicitly excludes `compound = 'None'`
-in addition to `IS NULL` and `'UNKNOWN'`. Remove that clause once ingest.py
-is fixed and the column is re-ingested.
-"""
 from __future__ import annotations
 
 import pandas as pd

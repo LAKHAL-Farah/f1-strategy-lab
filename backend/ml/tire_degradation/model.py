@@ -1,12 +1,4 @@
-"""Production-facing wrapper around the trained tire degradation model.
 
-Loads the bundle produced by train.py:
-    {"model": sklearn_model, "te_map": dict, "global_mean": float, "feature_cols": list}
-
-All feature construction here MUST match ml/tire_degradation/features.py exactly.
-This file does not re-derive features from raw inputs — that logic belongs in
-features.py so train.py and this class can never silently drift apart.
-"""
 from pathlib import Path
 import joblib
 import pandas as pd
