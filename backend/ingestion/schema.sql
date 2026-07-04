@@ -7,6 +7,7 @@ CREATE TABLE races (
     name            VARCHAR(100) NOT NULL,   -- "Bahrain Grand Prix"
     circuit         VARCHAR(100) NOT NULL,   -- "Sakhir" (FastF1's event Location field)
     country         VARCHAR(60) NOT NULL,
+    
     race_date       DATE NOT NULL,
     total_laps      INTEGER,
     UNIQUE (year, round)
