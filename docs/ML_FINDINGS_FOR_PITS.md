@@ -1,5 +1,5 @@
 
-## Pit time loss model — 2026-07-04
+## Pit time loss model 
 
 - Pit events: 342 usable / 538 raw (196 dropped)
 - Train: 233 pit events (rounds 1-15) | Validate: 109 pit events (rounds 16-22)
@@ -26,21 +26,22 @@
 |  2 | arbitrary ID (control, no target info)  |       8856.27 |      1803.72 |
 - Production default used: **plain**
 
-### Feature ablation — laps_since_caution (CV, never touches the validation set)
+### Feature ablation laps_since_caution (CV, never touches the validation set)
 
 |    | feature_set                |   cv_mean_mae |   cv_std_mae |
 |---:|:---------------------------|--------------:|-------------:|
 |  0 | without laps_since_caution |       5844.77 |      2019.48 |
 |  1 | with laps_since_caution    |       5723.35 |      1988.68 |
 
-### Final bake-off — simple vs. refined (val touched exactly once per candidate)
+### Final bake-off simple vs. refined (val touched exactly once per candidate)
 
-Two pre-specified candidates, decided before either was scored: **simple** (fixed pre-refinement hyperparameters, no `laps_since_caution`, plain encoding) vs. **refined** (CV-tuned hyperparameters, `laps_since_caution` included, CV-selected encoding). Whichever wins on val ships — CV's pick is not trusted blindly.
+Two pre-specified candidates, decided before either was scored: **simple** (fixed pre-refinement hyperparameters, no `laps_since_caution`, plain encoding) vs. **refined** (CV-tuned hyperparameters, `laps_since_caution` included, CV-selected encoding). Whichever wins on val ships  CV's pick is not trusted blindly.
 
 - simple  honest MAE: **4760.81 ms**
 - refined honest MAE: **4895.29 ms**
 - Refined vs simple: -134.47 ms (positive means refined is better, negative means simple is better)
-- **Shipped: simple** — CV-tuned config did not actually beat the simpler one on held-out val; the gap between them is well within fold-to-fold CV noise, so this isn't evidence the refinements were wrong, just that this dataset is too small to tell the difference yet.
+- Required margin to switch to refined: **1936.08 ms** (1 x typical CV fold std  a win smaller than this isn't trusted as a real improvement, see select_bakeoff_winner)
+- **Shipped: simple**  CV-tuned config did not actually beat the simpler one on held-out val; the gap between them is well within fold-to-fold CV noise, so this isn't evidence the refinements were wrong, just that this dataset is too small to tell the difference yet.
 
 ### Final result (validation set touched exactly once per candidate, above)
 

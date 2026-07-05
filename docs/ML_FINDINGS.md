@@ -1,10 +1,10 @@
 
-## Tire Degradation Model � 2026-07-04 14:06 UTC
+## Tire Degradation Model 
 
 Configuration: tuned hyperparameters ({'n_estimators': 100, 'max_depth': 8, 'min_samples_leaf': 5}) + out-of-fold target-encoded
 circuit + laps_since_sc. Selected in 03_model_refinement.ipynb after testing each
 change in isolation, then confirming they combine (66ms further gain over target
-encoding alone, less than the ~181ms naive sum would suggest � the two features
+encoding alone, less than the ~181ms naive sum would suggest the two features
 overlap somewhat, but both still contribute).
 
 - Train rounds: 1-15 (15167 rows)
@@ -29,13 +29,13 @@ overlap somewhat, but both still contribute).
 - Fuel-load confound: `lap_number` proxies fuel burn-off, confounded with genuine degradation.
 - Target-encoded circuit is noisier for circuits with few training-round appearances;
   circuits unseen in training fall back to the global training mean.
-- WET/INTERMEDIATE compounds underrepresented in a single season � low confidence.
+- WET/INTERMEDIATE compounds underrepresented in a single season low confidence.
 - `laps_since_sc` does not close the gap on safety-car-affected laps: MAE was still
   markedly worse just after a restart (laps_since_sc <= 3) than at steady state in
-  validation testing � the feature helps overall, it does not solve this limitation.
+  validation testing the feature helps overall, it does not solve this limitation.
 - Rookie / partial-season drivers have thin data relative to full-season drivers.
 - Baselines computed across the full season, not just the training split (see features.py docstring).
-- Data known to still contain gaps as of the last data-quality pass � see
+- Data known to still contain gaps as of the last data-quality pass see
   CHECKPOINT_DATA_EXPLORATION_CLEANING.md (rounds 6/13 previously missing;
   compound-label cleanup and pit_stops parsing tracked separately, the latter
   doesn't affect this model).
@@ -47,7 +47,7 @@ overlap somewhat, but both still contribute).
 Configuration: tuned hyperparameters ({'n_estimators': 100, 'max_depth': 8, 'min_samples_leaf': 5}) + out-of-fold target-encoded
 circuit + laps_since_sc. Selected in 03_model_refinement.ipynb after testing each
 change in isolation, then confirming they combine (66ms further gain over target
-encoding alone, less than the ~181ms naive sum would suggest � the two features
+encoding alone, less than the ~181ms naive sum would suggest the two features
 overlap somewhat, but both still contribute).
 
 - Train rounds: 1-15 (15167 rows)
@@ -72,13 +72,13 @@ overlap somewhat, but both still contribute).
 - Fuel-load confound: `lap_number` proxies fuel burn-off, confounded with genuine degradation.
 - Target-encoded circuit is noisier for circuits with few training-round appearances;
   circuits unseen in training fall back to the global training mean.
-- WET/INTERMEDIATE compounds underrepresented in a single season � low confidence.
+- WET/INTERMEDIATE compounds underrepresented in a single season low confidence.
 - `laps_since_sc` does not close the gap on safety-car-affected laps: MAE was still
   markedly worse just after a restart (laps_since_sc <= 3) than at steady state in
   validation testing  the feature helps overall, it does not solve this limitation.
 - Rookie / partial-season drivers have thin data relative to full-season drivers.
 - Baselines computed across the full season, not just the training split (see features.py docstring).
-- Data known to still contain gaps as of the last data-quality pass � see
+- Data known to still contain gaps as of the last data-quality pass see
   CHECKPOINT_DATA_EXPLORATION_CLEANING.md (rounds 6/13 previously missing;
   compound-label cleanup and pit_stops parsing tracked separately, the latter
   doesn't affect this model).
