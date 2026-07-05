@@ -1,5 +1,4 @@
 
-
 from __future__ import annotations
 
 import os
@@ -28,11 +27,11 @@ from features import (
     LAPS_SINCE_CAUTION_CAP,
 )
 
+
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-
 
 TRAIN_ROUNDS = range(1, 16)   # rounds 1-15
 VAL_ROUNDS = range(16, 23)    # rounds 16-22
@@ -54,6 +53,17 @@ FEATURES_WITHOUT_CAUTION = [c for c in FEATURE_COLUMNS if c != "laps_since_cauti
 # fixed, un-tuned reference point every run — same idea as keeping a
 # control group fixed across an experiment instead of letting it drift.
 SIMPLE_PARAMS = {"n_estimators": 200, "max_depth": 6, "min_samples_leaf": 5}
+
+# How much better "refined" has to be than "simple" on val, in units of
+# the CV fold-to-fold std (typical_std, from the hyperparameter search),
+# before it's trusted enough to actually ship. A gain of 1ms is not
+# evidence of anything if fold MAE routinely swings by ~2000ms — see the
+# phase-3 result, where refined "won" CV by margins smaller than this
+# same noise, then went on to LOSE the val bake-off by 134ms. Factor of
+# 1.0 means "must beat simple by more than one typical fold's worth of
+# noise"; raise it to demand stronger evidence, lower it (e.g. 0) to
+# recover the old "any improvement wins" behavior.
+BAKEOFF_MARGIN_FACTOR = 1.0
 
 # Hyperparameter grid for the CV search. Same grid used in the phase-3
 # refinement notebook — kept here so the notebook can import it instead of
@@ -244,6 +254,32 @@ def run_feature_ablation(train_events: pd.DataFrame, folds, model_params) -> pd.
     return pd.DataFrame(rows)
 
 
+def select_bakeoff_winner(simple_mae: float, refined_mae: float, margin_ms: float) -> str:
+    """
+    Decide which of the two final bake-off candidates to ship.
+
+    Ships "refined" only if it beats "simple" by MORE than `margin_ms` on
+    val MAE — a win smaller than that is indistinguishable from noise at
+    this sample size, and "simple" (cheaper, fewer moving parts, no CV
+    search to go stale) is the right conservative default in that case.
+    Ties go to "simple".
+
+    `margin_ms` should be an estimate of real fold-to-fold noise on this
+    dataset (e.g. `typical_std` from the hyperparameter CV search) rather
+    than a hardcoded constant, so the bar moves with how noisy the data
+    actually is — noisier data requires a bigger win to trust it, and
+    that scales automatically as more races get added.
+
+    Pure function, deliberately kept separate from run() so the switching
+    rule itself can be unit-tested without needing a database, laps data,
+    or a full training run — see test_train_bakeoff.py.
+    """
+    if margin_ms < 0:
+        raise ValueError(f"margin_ms must be >= 0, got {margin_ms}")
+    gain = simple_mae - refined_mae  # positive => refined is numerically better
+    return "refined" if gain > margin_ms else "simple"
+
+
 def run(laps: pd.DataFrame, pit_stops: pd.DataFrame, dry_run: bool = False) -> dict:
     events = build_pit_events(laps, pit_stops)
     events = add_stint_number(events)
@@ -349,6 +385,7 @@ def run(laps: pd.DataFrame, pit_stops: pd.DataFrame, dry_run: bool = False) -> d
     refined_mae = mean_absolute_error(y_val, refined_pred)  # 2nd honest touch of val
 
     bakeoff_gain = simple_mae - refined_mae  # positive => refined actually better
+    bakeoff_margin = BAKEOFF_MARGIN_FACTOR * typical_std
 
     print("\nFinal bake-off (val touched exactly once per candidate, decided in advance):")
     print(f"  simple  — params={SIMPLE_PARAMS}, features={FEATURES_WITHOUT_CAUTION}, encoding=plain")
@@ -356,18 +393,22 @@ def run(laps: pd.DataFrame, pit_stops: pd.DataFrame, dry_run: bool = False) -> d
     print(f"  refined — params={best_params}, features={FEATURE_COLUMNS}, encoding={chosen_encoding}")
     print(f"            val MAE: {refined_mae:.2f} ms")
     print(f"  refined vs simple: {bakeoff_gain:+.2f} ms (positive = refined wins, negative = simple wins)")
+    print(f"  required margin to switch to refined: {bakeoff_margin:.2f} ms "
+          f"({BAKEOFF_MARGIN_FACTOR:g} x typical CV fold std)")
 
-    if bakeoff_gain > 0:
-        chosen_config = "refined"
+    chosen_config = select_bakeoff_winner(simple_mae, refined_mae, bakeoff_margin)
+    if chosen_config == "refined":
         model, model_pred, model_mae = refined_model, refined_pred, refined_mae
         chosen_feature_columns = FEATURE_COLUMNS
         chosen_params = best_params
     else:
-        chosen_config = "simple"
         model, model_pred, model_mae = simple_model, simple_pred, simple_mae
         chosen_feature_columns = FEATURES_WITHOUT_CAUTION
         chosen_params = SIMPLE_PARAMS
         chosen_encoding = "plain"  # the simple candidate never uses OOF
+        if bakeoff_gain > 0:
+            print(f"  (note: refined had a lower raw MAE by {bakeoff_gain:.2f} ms, but that's "
+                  f"smaller than the {bakeoff_margin:.2f} ms noise margin — not trusted as a real win)")
     print(f"  -> shipping: {chosen_config}")
 
     importances = pd.Series(
@@ -420,6 +461,7 @@ def run(laps: pd.DataFrame, pit_stops: pd.DataFrame, dry_run: bool = False) -> d
         "feature_importances": importances,
         "simple_mae": simple_mae,
         "refined_mae": refined_mae,
+        "bakeoff_margin": bakeoff_margin,
         "chosen_config": chosen_config,
         "chosen_params": chosen_params,
     }
@@ -483,6 +525,9 @@ def _append_findings(result: dict) -> None:
         f"- refined honest MAE: **{result['refined_mae']:.2f} ms**",
         f"- Refined vs simple: {result['simple_mae'] - result['refined_mae']:+.2f} ms "
         "(positive means refined is better, negative means simple is better)",
+        f"- Required margin to switch to refined: **{result['bakeoff_margin']:.2f} ms** "
+        f"({BAKEOFF_MARGIN_FACTOR:g} x typical CV fold std — a win smaller than this "
+        "isn't trusted as a real improvement, see select_bakeoff_winner)",
         f"- **Shipped: {result['chosen_config']}**"
         + (
             " — CV-tuned config did not actually beat the simpler one on held-out val; "
